@@ -1,151 +1,100 @@
-from django.contrib.auth.mixins import PermissionRequiredMixin
+# Импортируем класс, который говорит нам о том,
+# что в этом представлении мы будем выводить список объектов из БД
 from django.urls import reverse_lazy
-from django.shortcuts import render
-from django.views.generic import ListView, DetailView
-from django.views.generic.edit import CreateView, UpdateView, DeleteView
-
-from .filters import NewFilter
-
-from django.contrib.auth.decorators import login_required
-from django.db.models import Exists, OuterRef
-from django.views.decorators.csrf import csrf_protect
-from .models import New, Subscription, Category
+from django.views.generic import ListView, DetailView, CreateView, UpdateView, DeleteView, ListView, TemplateView
+from .models import Post, Author, User, SubscribersCategory
+from .filters import PostFilter, PostCategoryFilter
+from django.contrib.auth.mixins import PermissionRequiredMixin
+from django.views.generic.edit import CreateView
+from .forms import PostForm, SubscribeForm
 
 
-class NewsListView(ListView):
-    model = New
-    template_name = 'default.html'
+
+class PostList(ListView):
+    # Указываем модель, объекты которой мы будем выводить
+    model = Post
+    # Поле, которое будет использоваться для сортировки объектов
+    ordering = '-datetime_post'
+#    queryset = Post.objects.filter()
+    # Указываем имя шаблона, в котором будут все инструкции о том,
+    # как именно пользователю должны быть показаны наши объекты
+    template_name = 'news.html'
+    # Это имя списка, в котором будут лежать все объекты.
+    # Его надо указать, чтобы обратиться к списку объектов в html-шаблоне.
     context_object_name = 'news'
-    ordering = ['-data_pub']
-    paginate_by = 10
-
-
-class NewDetailView(DetailView):
-    model = New
-    template_name = 'detail.html'
-    context_object_name = 'new'
-
-
-class UncosNewsListView(ListView):
-    model = New
-    template_name = 'uncos.html'
-    context_object_name = 'news'
-    ordering = ['-data_pub']
     paginate_by = 10
 
     def get_queryset(self):
-        return super().get_queryset().filter(category='uncos')
+        queryset = super().get_queryset()
+        self.filterset = PostFilter(self.request.GET, queryset)
+        return self.filterset.qs
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        paginator = context['paginator']
-        current_page = context['page_obj']
-        start_index = max(current_page.number - 2, 1)
-        end_index = min(current_page.number + 2, paginator.num_pages)
-        page_range = range(start_index, end_index + 1)
-        context['page_range'] = page_range
+        context['filterset'] = self.filterset
         return context
 
 
-class ArticlesNewsListView(ListView):
-    model = New
-    template_name = 'articles.html'
-    context_object_name = 'news'
-    ordering = ['-data_pub']
-    paginate_by = 10
+class PostDetail(DetailView):
+    model = Post
+    ordering = '-datetime_post'
+    template_name = 'post.html'
+    context_object_name = 'post'
+
+
+class PostCreate(PermissionRequiredMixin, CreateView):
+    form_class = PostForm
+    model = Post
+    template_name = 'create.html'
+    permission_required = 'news.add_post' #добавление права создание объекта
+
+    def form_valid(self, form):
+        post = form.save(commit=False)
+        if self.request.path == '/news/create/':
+            post.types_post = 'NE'
+        if self.request.path == '/article/create/':
+            post.types_post = 'AR'
+        return super().form_valid(form)
+
+
+class PostUpdate(PermissionRequiredMixin, UpdateView):
+    form_class = PostForm
+    model = Post
+    template_name = 'post_edit.html'
+    permission_required = 'news.change_post' #добавление права изменение содержание объекта
+
+
+# Представление удаляющее товар.
+class PostDelete(DeleteView):
+    model = Post
+    template_name = 'post_delete.html'
+    success_url = reverse_lazy('post_list')
+
+
+class PostSearch(ListView):
+    model = Post
+    form = PostFilter
+    template_name = 'search.html'
+    context_object_name = 'search'
 
     def get_queryset(self):
-        return super().get_queryset().filter(category='articles')
+        queryset = super(PostSearch, self).get_queryset()
+        self.filterset = PostFilter(self.request.GET, queryset)
+        return self.filterset.queryset
+
+    def get_context_data(self, **kwargs):
+        context = super(PostSearch, self).get_context_data(**kwargs)
+        context['filterset'] = self.filterset
+        return context
 
 
-class NewsSearchView(ListView):
-    model = New
-    template_name = 'news_search.html'
-    context_object_name = 'news'
-    ordering = ['-data_pub']
-    paginate_by = 10
+class SubscriberView(CreateView):
+    model = SubscribersCategory
+    form_class = SubscribeForm
+    template_name = 'subscribe.html'
+    success_url = reverse_lazy('post_list')
 
-    def get_queryset(self):
-        query = self.request.GET.get('q')
-        if query:
-            return New.objects.filter(title__icontains=query)
-        return New.objects.all()
-
-
-def news_search(request):
-    news_list = New.objects.all()
-    news_filter = NewFilter(request.GET, queryset=news_list)
-    return render(request, 'news_search.html', {'filter': news_filter, 'news_list': news_filter.qs})
-
-
-class UncosCreateView(PermissionRequiredMixin, CreateView):
-    permission_required = ('news.add_new',)
-    model = New
-    fields = ['title', 'text', 'category']
-    template_name = 'news_form.html'
-
-
-class UncosUpdateView(PermissionRequiredMixin, UpdateView):
-    permission_required = ('news.change_new',)
-    model = New
-    fields = ['title', 'text', 'category']
-    template_name = 'news_edit.html'
-
-
-class UncosDeleteView(PermissionRequiredMixin, DeleteView):
-    permission_required = ('news.delete_new',)
-    model = New
-    success_url = reverse_lazy('index')
-    template_name = 'news_confirm_delete.html'
-
-
-class ArticlesCreateView(PermissionRequiredMixin, CreateView):
-    permission_required = ('news.add_new',)
-    model = New
-    fields = ['title', 'text', 'category']
-    template_name = 'articles_form.html'
-
-
-class ArticlesUpdateView(PermissionRequiredMixin, UpdateView):
-    permission_required = ('news.change_new',)
-    model = New
-    fields = ['title', 'text', 'category']
-    template_name = 'articles_edit.html'
-
-
-class ArticlesDeleteView(PermissionRequiredMixin, DeleteView):
-    permission_required = ('news.delete_new',)
-    model = New
-    success_url = reverse_lazy('articles')
-    template_name = 'articles_confirm_delete.html'
-
-
-@login_required
-@csrf_protect
-def subscriptions(request):
-    if request.method == 'POST':
-        category_id = request.POST.get('category_id')
-        category = Category.objects.get(id=category_id)
-        action = request.POST.get('action')
-
-        if action == 'subscribe':
-            Subscription.objects.create(user=request.user, category=category)
-        elif action == 'unsubscribe':
-            Subscription.objects.filter(
-                user=request.user,
-                category=category,
-            ).delete()
-
-    categories_with_subscriptions = Category.objects.annotate(
-        user_subscribed=Exists(
-            Subscription.objects.filter(
-                user=request.user,
-                category=OuterRef('pk'),
-            )
-        )
-    ).order_by('name')
-    return render(
-        request,
-        'subscriptions.html',
-        {'categories': categories_with_subscriptions},
-    )
+    def form_valid(self, form):
+        subscribe = form.save(commit=False)
+        subscribe.subscriber = User.objects.get(pk=self.request.user.id)
+        return super(SubscriberView, self).form_valid(form)

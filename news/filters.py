@@ -1,27 +1,27 @@
+from django_filters import FilterSet, DateFilter
+from django.forms import DateInput
+from .models import Post, PostCategory
 import django_filters
-from django import forms
-from .models import New
-
-CATEGORIES_CHOICES = [
-    ('uncos', 'Новости'),
-    ('articles', 'Статьи'),
-]
 
 
-class NewFilter(django_filters.FilterSet):
-    title = django_filters.CharFilter(
-        lookup_expr='icontains',
-        label='Поиск по названию'
-    )
-    category = django_filters.ChoiceFilter(
-        choices=CATEGORIES_CHOICES,
-        label='Поиск по категории'
-    )
-    data_pub = django_filters.DateFilter(
-        widget=forms.TextInput(attrs={'type': 'date'}),
-        label='Поиск по дате'
+
+class PostFilter(FilterSet):
+
+    datetime_post = DateFilter(
+        lookup_expr=('lt'),
+        widget=DateInput(attrs={'placeholder': 'Select a date', 'type': 'date'}),
+        label='Date',
     )
 
     class Meta:
-        model = New
-        fields = ['title', 'category', 'data_pub']
+        model = Post
+        fields = {
+            'header': ['icontains'],
+            'category_post': ['exact'],
+        }
+
+
+class PostCategoryFilter(FilterSet):
+    class Meta:
+        model = PostCategory
+        fields = ['category']

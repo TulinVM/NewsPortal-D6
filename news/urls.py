@@ -1,36 +1,21 @@
 from django.urls import path
-from .views import (
-    NewsListView,
-    NewDetailView,
-    UncosNewsListView,
-    ArticlesNewsListView,
-    NewsSearchView,
-    news_search,
-    subscriptions,
-
-    UncosCreateView,
-    UncosUpdateView,
-    UncosDeleteView,
-    ArticlesCreateView,
-    ArticlesUpdateView,
-    ArticlesDeleteView,
-)
-from accounts.views import SignUp
-
+# Импортируем созданное нами представление
+from .views import PostList, PostDetail, PostCreate, PostUpdate, PostDelete, SubscriberView
+from django.views.decorators.cache import cache_page
 
 urlpatterns = [
-    path('', NewsListView.as_view(template_name='index.html'), name='index'),
-    path('<int:pk>/', NewDetailView.as_view(), name='detail'),
-    path('uncos/', UncosNewsListView.as_view(), name='uncos'),
-    path('articles/', ArticlesNewsListView.as_view(), name='articles'),
-    path('news/', NewsSearchView.as_view(), name='news'),
-    path('search/', news_search, name='news_search'),
-    path('../accounts/signup/', SignUp.as_view(), name='signup'),
-    path('subscriptions/', subscriptions, name='subscriptions'),
-    path('uncos/create/', UncosCreateView.as_view(), name='uncos_create'),
-    path('uncos/<int:pk>/edit/', UncosUpdateView.as_view(), name='uncos_edit'),
-    path('uncos/<int:pk>/delete/', UncosDeleteView.as_view(), name='uncos_delete'),
-    path('articles/create/', ArticlesCreateView.as_view(), name='articles_create'),
-    path('articles/<int:pk>/edit/', ArticlesUpdateView.as_view(), name='articles_edit'),
-    path('articles/<int:pk>/delete/', ArticlesDeleteView.as_view(), name='articles_delete'),
+   # path — означает путь.
+   # В данном случае путь ко всем товарам у нас останется пустым,
+   # чуть позже станет ясно почему.
+   # Т.к. наше объявленное представление является классом,
+   # а Django ожидает функцию, нам надо представить этот класс в виде view.
+   # Для этого вызываем метод as_view.
+   path('', PostList.as_view(), name='post_list'), #http://127.0.0.1:8000/news/
+   path('<int:pk>', PostDetail.as_view(), name='post_detail'), #http://127.0.0.1:8000/1
+   path('create/', PostCreate.as_view(), name='post_create'), #http://127.0.0.1:8000/news/create/
+   path('<int:pk>/update/', PostUpdate.as_view(), name='post_update'), #http://127.0.0.1:8000/news/pk/update/
+   path('<int:pk>/delete/', PostDelete.as_view(), name='post_delete'), #http://127.0.0.1:8000/news/pk/delete/
+   path('post/', SubscriberView.as_view(), name='subscribe'), #http://127.0.0.1:8000/
+   path('<int:pk>/', cache_page(300)(PostDetail.as_view()), name='post_detail'), #кэширование страниц с новостями 5 минут
+   path('', cache_page(60)(PostList.as_view()), name='post_list'), #кэширование главной страницы 1 минута
 ]
